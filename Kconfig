@@ -1,33 +1,33 @@
-menu "DFUCRYP custom app"
+menu "DFUCRYPTO custom app"
 
-config APP_DFUCRYP
+config APP_DFUCRYPTO
   bool "Dfucryp App"
   depends on STM32F4
   default y
   select USR_LIB_WOOKEY
   ---help---
-    Say y if you want to embbed DFUCRYP custom application.
+    Say y if you want to embbed DFUCRYPTO custom application.
 
-config APP_DFUCRYP_FW
+config APP_DFUCRYPTO_FW
   bool "Sdio App for firmware mode"
-  depends on APP_DFUCRYP
+  depends on APP_DFUCRYPTO
   depends on STM32F4
   default y
   ---help---
     Say y if you want to embbed Sdio custom application in firmware.
 
-config APP_DFUCRYP_DFU
+config APP_DFUCRYPTO_DFU
   bool "Sdio App for DFU mode"
-  depends on APP_DFUCRYP
+  depends on APP_DFUCRYPTO
   depends on FIRMWARE_DFU
   depends on STM32F4
   default y
   ---help---
     Say y if you want to embbed Sdio custom application in DFU.
 
-config APP_DFUCRYP_NUMSLOTS
+config APP_DFUCRYPTO_NUMSLOTS
   int "Number of required slots"
-  depends on APP_DFUCRYP
+  depends on APP_DFUCRYPTO
   default 1
   ---help---
     specify the number of slots required by the application text and data/bss.
@@ -37,9 +37,9 @@ config APP_DFUCRYP_NUMSLOTS
     This choice has an impact on the total number of applications that can be loaded
     in the firmware.
 
-config APP_DFUCRYP_STACKSIZE
+config APP_DFUCRYPTO_STACKSIZE
   int "Stack size"
-  depends on APP_DFUCRYP
+  depends on APP_DFUCRYPTO
   default 8192
   ---help---
     Specify the application stack size, in bytes. By default, set to 8192
@@ -47,26 +47,26 @@ config APP_DFUCRYP_STACKSIZE
     the stack can be bigger or smaller.
     
 
-config APP_DFUCRYP_SHM
-  bool "DFUCRYP requires shared memory to communicate with others"
-  depends on APP_DFUCRYP
+config APP_DFUCRYPTO_SHM
+  bool "DFUCRYPTO requires shared memory to communicate with others"
+  depends on APP_DFUCRYPTO
   default n
   ---help---
-    say YES if DFUCRYP requires shared memory to communicate with others
+    say YES if DFUCRYPTO requires shared memory to communicate with others
 
 menu "Permissions"
-    visible if APP_DFUCRYP
+    visible if APP_DFUCRYPTO
 
 menu "Devices"
 
-config APP_DFUCRYP_PERM_DEV_DMA
+config APP_DFUCRYPTO_PERM_DEV_DMA
     bool "App has capacity to register DMA streams"
     default n
     ---help---
     if no, the application can't declare a DMA. If y, the application
     is able to require one or more secure DMA stream(s).
 
-config APP_DFUCRYP_PERM_DEV_CRYPTO
+config APP_DFUCRYPTO_PERM_DEV_CRYPTO
     int "App can interact with HW cryptographic module"
     default 0
     range 0 3
@@ -79,18 +79,18 @@ config APP_DFUCRYP_PERM_DEV_CRYPTO
     If 3, the application as a full, autonomous access to the HW cryp
     module
 
-config APP_DFUCRYP_PERM_DEV_BUSES
+config APP_DFUCRYPTO_PERM_DEV_BUSES
     bool "App has capacity to use buses (SPI, I2C, USART...)"
     default n
     ---help---
     If n, the application can't access any buses (I2C, SPI, USART).
     If y, the application can require a bus mapping.
 
-config APP_DFUCRYP_PERM_DEV_EXTI
+config APP_DFUCRYPTO_PERM_DEV_EXTI
     bool "App can use EXTI or GPIO driven external interrupts"
     default n
 
-config APP_DFUCRYP_PERM_DEV_TIM
+config APP_DFUCRYPTO_PERM_DEV_TIM
     bool "App can register a hardware timer"
     default n
     ---help---
@@ -102,7 +102,7 @@ endmenu
 
 menu "Time"
 
-config APP_DFUCRYP_PERM_TIM_GETCYCLES
+config APP_DFUCRYPTO_PERM_TIM_GETCYCLES
     int "App has capacity to get current timestamp from kernel"
     default 0
     range 0 3
@@ -116,7 +116,7 @@ endmenu
 
 menu "Tasking"
 
-config APP_DFUCRYP_PERM_TSK_FISR
+config APP_DFUCRYPTO_PERM_TSK_FISR
     bool "App is allowed to request main thread execution after ISR"
     default n
     ---help---
@@ -125,14 +125,14 @@ config APP_DFUCRYP_PERM_TSK_FISR
     structure in device_t struct, using the IRQ_ISR_FORCE_MAINTHREAD value.
     If n, this field can't be set to this value.
 
-config APP_DFUCRYP_PERM_TSK_FIPC
+config APP_DFUCRYPTO_PERM_TSK_FIPC
     bool "App is allowed to request peer execution on syncrhnous send IPC"
     default n
     ---help---
     If y, the application is able to request peer thread execution
     when sending syncrhonous IPC.
 
-config APP_DFUCRYP_PERM_TSK_RESET
+config APP_DFUCRYPTO_PERM_TSK_RESET
     bool "App is allowed to request a board software reset"
     default n
     ---help---
@@ -140,7 +140,7 @@ config APP_DFUCRYP_PERM_TSK_RESET
     only if the application is handling events that require urgent reactivity
     implying board reset.
 
-config APP_DFUCRYP_PERM_TSK_UPGRADE
+config APP_DFUCRYPTO_PERM_TSK_UPGRADE
     bool "App is allowed to upgrade the firmware"
     default n
     ---help---
@@ -148,7 +148,7 @@ config APP_DFUCRYP_PERM_TSK_UPGRADE
     order to upgrade the overall firmware. This permission should
     be hosted by a task with no external access (USB, USART...)
 
-config APP_DFUCRYP_PERM_TSK_RNG
+config APP_DFUCRYPTO_PERM_TSK_RNG
     bool "App is allowed to access an an entropy input source, through sys_get_random"
     default n
     ---help---
@@ -160,7 +160,7 @@ endmenu
 
 menu "Memory management"
 
-config APP_DFUCRYP_PERM_MEM_DYNAMIC_MAP
+config APP_DFUCRYPTO_PERM_MEM_DYNAMIC_MAP
     bool "App is allow to declare MAP_VOLUNTARY devices"
     default n
     ---help---
