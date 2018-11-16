@@ -1,5 +1,5 @@
-APP_NAME ?= dfucryp
-DIR_NAME = dfucryp
+APP_NAME ?= dfucrypto
+DIR_NAME = dfucrypto
 
 PROJ_FILES = ../../
 BIN_NAME = $(APP_NAME).bin
