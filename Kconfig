@@ -1,7 +1,7 @@
 menu "DFUCRYPTO custom app"
 
 config APP_DFUCRYPTO
-  bool "Dfucryp App"
+  bool "Dfucrypto App"
   depends on STM32F4
   default y
   select USR_LIB_WOOKEY
@@ -9,21 +9,21 @@ config APP_DFUCRYPTO
     Say y if you want to embbed DFUCRYPTO custom application.
 
 config APP_DFUCRYPTO_FW
-  bool "Sdio App for firmware mode"
+  bool "Dfucrypto App for firmware mode"
   depends on APP_DFUCRYPTO
   depends on STM32F4
-  default y
+  default n
   ---help---
-    Say y if you want to embbed Sdio custom application in firmware.
+    Say y if you want to embbed Dfucrypto custom application in firmware.
 
 config APP_DFUCRYPTO_DFU
-  bool "Sdio App for DFU mode"
+  bool "Dfucrypto App for DFU mode"
   depends on APP_DFUCRYPTO
   depends on FIRMWARE_DFU
   depends on STM32F4
   default y
   ---help---
-    Say y if you want to embbed Sdio custom application in DFU.
+    Say y if you want to embbed Dfucrypto custom application in DFU.
 
 config APP_DFUCRYPTO_NUMSLOTS
   int "Number of required slots"

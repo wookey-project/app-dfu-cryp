@@ -7,7 +7,7 @@ HEX_NAME = $(APP_NAME).hex
 ELF_NAME = $(APP_NAME).elf
 
 ######### Metadata ##########
-ifeq ($(APP_NAME),dfu-cryp)
+ifeq ($(APP_NAME),dfucrypto)
     IMAGE_TYPE = IMAGE_TYPE0
 else
     IMAGE_TYPE = IMAGE_TYPE1
@@ -30,9 +30,9 @@ CFLAGS += -MMD -MP
 
 LDFLAGS += $(AFLAGS) -fno-builtin -nostdlib -nostartfiles
 
-EXTRA_LDFLAGS ?= -Tdfu-cryp.fw1.ld
+EXTRA_LDFLAGS ?= -Tdfucrypto.fw1.ld
 LDFLAGS += $(EXTRA_LDFLAGS) -L$(APP_BUILD_DIR) -fno-builtin -nostdlib
-LD_LIBS += -lcryp -laes -lrng -lstd -L$(APP_BUILD_DIR)
+LD_LIBS += -lcryp -lstd -L$(APP_BUILD_DIR)
 
 BUILD_DIR ?= $(PROJ_FILES)build
 
