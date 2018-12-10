@@ -18,7 +18,7 @@
 
 
 #define CRYPTO_MODE CRYP_PRODMODE
-#define CRYPTO_DEBUG 0
+#define CRYPTO_DEBUG 1
 
 #ifdef CONFIG_APP_CRYPTO_USE_GETCYCLES
 const char *tim = "tim";
@@ -320,8 +320,8 @@ int _main(uint32_t task_id)
     t_ipc_command ipc_mainloop_cmd = { 0 };
     logsize_t ipcsize = sizeof(ipc_mainloop_cmd);
 
-//    struct dataplane_command dataplane_command_rw = { 0 };
-//    struct dataplane_command dataplane_command_ack = { MAGIC_DATA_WR_DMA_ACK, 0, 0 };
+    struct dataplane_command dataplane_command_rw = { 0 };
+    struct dataplane_command dataplane_command_ack = { MAGIC_DATA_WR_DMA_ACK, 0, 0 };
     uint8_t sinker = 0;
 
     while (1) {
@@ -334,7 +334,7 @@ int _main(uint32_t task_id)
 
         switch (ipc_mainloop_cmd.magic) {
 
-            case MAGIC_DATA_WR_DMA_REQ:
+            case MAGIC_DATA_RD_DMA_REQ:
                 {
                     /***************************************************
                      * Write mode automaton
@@ -347,7 +347,7 @@ int _main(uint32_t task_id)
 
                 }
 
-            case MAGIC_DATA_RD_DMA_REQ:
+            case MAGIC_DATA_WR_DMA_REQ:
                 {
                     /***************************************************
                      * Read mode automaton
@@ -356,6 +356,95 @@ int _main(uint32_t task_id)
                         printf("data rd DMA request command only allowed from USB app\n");
                         continue;
                     }
+
+                    dataplane_command_rw = ipc_mainloop_cmd.dataplane_cmd;
+                    struct dataplane_command flash_dataplane_command_rw = dataplane_command_rw;
+
+                    /* Ask smart to reinject the key (only for AES) */
+#ifdef CONFIG_AES256_CBC_ESSIV
+                    //write plane, first exec DMA, then ask SDIO for writing
+                    if (cryp_get_dir() == DECRYPT) {
+#if CRYPTO_DEBUG
+                        printf("===> Asking for reinjection!\n");
+#endif
+                        /* When switching from DECRYPT to ENCRYPT, we have to inject the key again */
+                        id = id_smart;
+                        size = sizeof (struct sync_command);
+                        ipc_sync_cmd_data.magic = MAGIC_CRYPTO_INJECT_CMD;
+                        ipc_sync_cmd_data.data.u8[0] = ENCRYPT;
+                        ipc_sync_cmd_data.data_size = (uint8_t)1;
+                        /* FIXME: this IPC should transmit the current chunk in order to generate its hash */
+
+                        sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(struct sync_command), (char*)&ipc_sync_cmd_data);
+
+                        sys_ipc(IPC_RECV_SYNC, &id, &size, (char*)&ipc_sync_cmd_data);
+#if CRYPTO_DEBUG
+                        printf("===> Key reinjection done!\n");
+#endif
+                    }
+#endif
+
+                    /********* ENCRYPTION LOGIC ************************************************************/
+                    /* We have to split our encryption in multiple subencryptions to deal with IV modification
+                     * on the crypto block size boundaries
+                     */
+#if 0
+                    This mechanism must be updated for the DFU specific crypto implementation
+                    This require a DMA request through cryp toward Flash AND a DMA request through cryp
+                    toward smart in order to let smart generate the hash of each chunk
+
+                    uint32_t chunk_size = dataplane_command_rw.num_sectors;
+                    uint32_t usb_address = shms_tab[ID_USB].address;
+                    uint32_t flash_address = shms_tab[ID_FLASH].address;
+                    unsigned int i;
+                    /* [RB] FIXME: sanity checks on the USB and SDIO buffer sizes that must be compliant! */
+                    for(i = 0; i < chunk_size; i++){
+#ifdef CONFIG_AES256_CBC_ESSIV
+                        uint8_t curr_essiv_iv[16] = { 0 };
+                        cbc_essiv_iv_derivation((scsi_sector_address + i), CBC_ESSIV_h_key, 32, curr_essiv_iv, 16);
+                        cryp_init_user(KEY_256, curr_essiv_iv, 16, AES_CBC, ENCRYPT);
+#else
+#ifdef CONFIG_TDES_CBC_ESSIV
+                        uint8_t curr_essiv_iv[8] = { 0 };
+                        cbc_essiv_iv_derivation((scsi_sector_address + i), CBC_ESSIV_h_key, 24, curr_essiv_iv, 8);
+                        cryp_init_user(KEY_192, curr_essiv_iv, 8, TDES_CBC, ENCRYPT);
+#else
+#error "No FDE algorithm has been selected ..."
+#endif
+#endif
+                        status_reg.dmaout_done = false;
+                        cryp_do_dma((const uint8_t *)usb_address, (const uint8_t *)flash_address, scsi_block_size, dma_in_desc, dma_out_desc);
+                        while (status_reg.dmaout_done == false){
+                            continue;
+                        }
+                        cryp_wait_for_emtpy_fifos();
+                    }
+                    /****************************************************************************************/
+#if CRYPTO_DEBUG
+                    printf("[write] CRYP DMA has finished ! %d\n", shms_tab[ID_USB].size);
+#endif
+                    status_reg.dmaout_done = false;
+#endif
+#if CRYPTO_DEBUG
+                    printf("[write] sending ipc to flash (%d)\n", id_dfuflash);
+#endif
+
+                    sys_ipc(IPC_SEND_SYNC, id_dfuflash, sizeof(struct dataplane_command), (const char*)&flash_dataplane_command_rw);
+
+                    // wait for flash task acknowledge (IPC)
+                    sinker = id_dfuflash;
+                    ipcsize = sizeof(struct dataplane_command);
+
+                    ret = sys_ipc(IPC_RECV_SYNC, &sinker, &ipcsize, (char*)&dataplane_command_ack);
+
+#if CRYPTO_DEBUG
+                    printf("[write] received ipc from flash (%d)\n", sinker);
+#endif
+                    // set ack magic for write ack
+                    dataplane_command_ack.magic = MAGIC_DATA_WR_DMA_ACK;
+                    // acknowledge to USB: data has been written to disk (IPC)
+                    sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(struct dataplane_command), (const char*)&dataplane_command_ack);
+
                     break;
 
                 }
