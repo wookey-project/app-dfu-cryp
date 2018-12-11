@@ -332,6 +332,10 @@ int _main(uint32_t task_id)
 
         sys_ipc(IPC_RECV_SYNC, &sinker, &ipcsize, (char*)&ipc_mainloop_cmd);
 
+#if CRYPTO_DEBUG
+        printf("Received IPC from task %d\n", sinker);
+#endif
+
         switch (ipc_mainloop_cmd.magic) {
 
             case MAGIC_DATA_RD_DMA_REQ:
@@ -438,7 +442,7 @@ int _main(uint32_t task_id)
                     ret = sys_ipc(IPC_RECV_SYNC, &sinker, &ipcsize, (char*)&dataplane_command_ack);
 
 #if CRYPTO_DEBUG
-                    printf("[write] received ipc from flash (%d)\n", sinker);
+                    printf("[write] received ipc from flash (%d), sending back to usb (%d)\n", sinker, id_usb);
 #endif
                     // set ack magic for write ack
                     dataplane_command_ack.magic = MAGIC_DATA_WR_DMA_ACK;
