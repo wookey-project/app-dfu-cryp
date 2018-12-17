@@ -320,8 +320,8 @@ int _main(uint32_t task_id)
     t_ipc_command ipc_mainloop_cmd = { 0 };
     logsize_t ipcsize = sizeof(ipc_mainloop_cmd);
 
-    struct dataplane_command dataplane_command_rw = { 0 };
-    struct dataplane_command dataplane_command_ack = { MAGIC_DATA_WR_DMA_ACK, 0, 0 };
+    struct sync_command_data dataplane_command_rw = { 0 };
+    struct sync_command_data dataplane_command_ack = { 0 };
     uint8_t sinker = 0;
 
     while (1) {
@@ -348,22 +348,22 @@ int _main(uint32_t task_id)
                         continue;
                     }
 
-                    dataplane_command_rw = ipc_mainloop_cmd.dataplane_cmd;
-                    struct dataplane_command flash_dataplane_command_rw = dataplane_command_rw;
+                    dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
+                    struct sync_command_data flash_dataplane_command_rw = dataplane_command_rw;
 
 
 #if CRYPTO_DEBUG
                     printf("[read] sending ipc to flash (%d)\n", id_dfuflash);
 #endif
 
-                    ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, sizeof(struct dataplane_command), (const char*)&flash_dataplane_command_rw);
+                    ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, sizeof(struct sync_command_data), (const char*)&flash_dataplane_command_rw);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send DMA_RD_REQ to flash!\n");
                     }
 
                     // wait for flash task acknowledge (IPC)
                     sinker = id_dfuflash;
-                    ipcsize = sizeof(struct dataplane_command);
+                    ipcsize = sizeof(struct sync_command_data);
 
                     ret = sys_ipc(IPC_RECV_SYNC, &sinker, &ipcsize, (char*)&dataplane_command_ack);
                     if (ret != SYS_E_DONE) {
@@ -373,10 +373,8 @@ int _main(uint32_t task_id)
 #if CRYPTO_DEBUG
                     printf("[read] received ipc from flash (%d), sending back to usb (%d)\n", sinker, id_usb);
 #endif
-                    // set ack magic for write ack
-                    dataplane_command_ack.magic = MAGIC_DATA_RD_DMA_ACK;
                     // acknowledge to USB: data has been written to disk (IPC)
-                    ret = sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(struct dataplane_command), (const char*)&dataplane_command_ack);
+                    ret = sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(struct sync_command_data), (const char*)&dataplane_command_ack);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send back DMA_WR_ACK to usb!\n");
                     }
@@ -395,8 +393,8 @@ int _main(uint32_t task_id)
                         continue;
                     }
 
-                    dataplane_command_rw = ipc_mainloop_cmd.dataplane_cmd;
-                    struct dataplane_command flash_dataplane_command_rw = dataplane_command_rw;
+                    dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
+                    struct sync_command_data flash_dataplane_command_rw = dataplane_command_rw;
 
 #if 0
                     /* Ask smart to reinject the key (only for AES) */
@@ -467,14 +465,14 @@ int _main(uint32_t task_id)
                     printf("[write] sending ipc to flash (%d)\n", id_dfuflash);
 #endif
 
-                    ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, sizeof(struct dataplane_command), (const char*)&flash_dataplane_command_rw);
+                    ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, sizeof(struct sync_command_data), (const char*)&flash_dataplane_command_rw);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send DMA_WR_REQ to flash!\n");
                     }
 
                     // wait for flash task acknowledge (IPC)
                     sinker = id_dfuflash;
-                    ipcsize = sizeof(struct dataplane_command);
+                    ipcsize = sizeof(struct sync_command_data);
 
                     ret = sys_ipc(IPC_RECV_SYNC, &sinker, &ipcsize, (char*)&dataplane_command_ack);
                     if (ret != SYS_E_DONE) {
@@ -487,7 +485,7 @@ int _main(uint32_t task_id)
                     // set ack magic for write ack
                     dataplane_command_ack.magic = MAGIC_DATA_WR_DMA_ACK;
                     // acknowledge to USB: data has been written to disk (IPC)
-                    ret = sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(struct dataplane_command), (const char*)&dataplane_command_ack);
+                    ret = sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(struct sync_command_data), (const char*)&dataplane_command_ack);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send back DMA_WR_ACK to usb!\n");
                     }
