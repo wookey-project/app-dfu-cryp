@@ -496,6 +496,59 @@ int _main(uint32_t task_id)
                 }
 
 
+            case MAGIC_DFU_HEADER_SEND:
+                {
+                    /***************************************************
+                     * DFUUSB request for smart
+                     **************************************************/
+                    if (sinker != id_usb) {
+                        printf("DFU header request command only allowed from USB app\n");
+                        continue;
+                    }
+
+                    dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
+
+#if CRYPTO_DEBUG
+                    printf("[write] sending ipc to smart (%d)\n", id_smart);
+#endif
+
+                    ret = sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(struct sync_command_data), (const char*)&dataplane_command_rw);
+                    if (ret != SYS_E_DONE) {
+                        printf("Error ! unable to send DFU_HEADER_SEND to smart!\n");
+                    }
+
+                    break;
+
+                }
+
+            case MAGIC_DFU_HEADER_VALID:
+            case MAGIC_DFU_HEADER_INVALID:
+                {
+                    /***************************************************
+                     * DFUUSB validation from smart
+                     **************************************************/
+                    if (sinker != id_smart) {
+                        printf("DFU header validation command only allowed from Smart app\n");
+                        continue;
+                    }
+
+                    dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
+
+#if CRYPTO_DEBUG
+                    printf("[write] sending ipc to dfuusb (%d)\n", id_usb);
+#endif
+
+                    ret = sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(struct sync_command_data), (const char*)&dataplane_command_rw);
+                    if (ret != SYS_E_DONE) {
+                        printf("Error ! unable to send DFU_HEADER_VALID to dfuusb!\n");
+                    }
+
+                    break;
+
+                }
+
+
+
             default:
                 {
                     /***************************************************
