@@ -400,7 +400,7 @@ int _main(uint32_t task_id)
                     /* Ask smart to reinject the key (only for AES) */
 #ifdef CONFIG_AES256_CBC_ESSIV
                     //write plane, first exec DMA, then ask SDIO for writing
-                    if (cryp_get_dir() == DECRYPT) {
+                    if (is_new_chunk()) {
 #if CRYPTO_DEBUG
                         printf("===> Asking for reinjection!\n");
 #endif
@@ -408,7 +408,7 @@ int _main(uint32_t task_id)
                         id = id_smart;
                         size = sizeof (struct sync_command);
                         ipc_sync_cmd_data.magic = MAGIC_CRYPTO_INJECT_CMD;
-                        ipc_sync_cmd_data.data.u8[0] = ENCRYPT;
+                        ipc_sync_cmd_data.data.u16[0] = chunk_id / 32768;
                         ipc_sync_cmd_data.data_size = (uint8_t)1;
                         /* FIXME: this IPC should transmit the current chunk in order to generate its hash */
 
