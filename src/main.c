@@ -431,9 +431,9 @@ int _main(uint32_t task_id)
 #endif
                     }
 
-                    /********* ENCRYPTION LOGIC ************************************************************/
-                    /* We have to split our encryption in multiple subencryptions to deal with IV modification
-                     * on the crypto block size boundaries
+                    /********* FIRMWARE DECRYPTION LOGIC ************************************************************/
+                    /* We have to split our encryption in multiple subencryptions to deal with key session modification
+                     * on the crypto chunk size boundaries
                      */
                     uint32_t chunk_size = dataplane_command_rw.data.u16[0];
 
