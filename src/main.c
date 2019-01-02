@@ -18,7 +18,7 @@
 
 
 #define CRYPTO_MODE CRYP_PRODMODE
-#define CRYPTO_DEBUG 1
+#define CRYPTO_DEBUG 0
 
 #ifdef CONFIG_APP_CRYPTO_USE_GETCYCLES
 const char *tim = "tim";
@@ -40,7 +40,9 @@ volatile status_reg_t status_reg = { 0 };
 
 bool is_new_chunk(void)
 {
+#if CRYPTO_DEBUG
     printf("total bytes read: %x, crypto_chunk_size: %x\n", total_bytes_read, crypto_chunk_size);
+#endif
     if (total_bytes_read && total_bytes_read % crypto_chunk_size == 0) 
     {
         return true;
