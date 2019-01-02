@@ -436,15 +436,25 @@ int _main(uint32_t task_id)
                      * on the crypto chunk size boundaries
                      */
                     uint32_t chunk_size = dataplane_command_rw.data.u16[0];
+		    uint32_t chunk_size_aligned = chunk_size;
+                    /* NOTE: the unerlying hardware does not support CTR mode on unaligned plaintexts:
+		     * we have to align our size on the AES block size boundary
+		     */
+		    if(chunk_size_aligned % 16 != 0){
+			chunk_size_aligned += (16 - (chunk_size_aligned % 16));
+		    }
 
                     status_reg.dmaout_done = false;
-                    if ((chunk_size > shms_tab[ID_USB].size) ||
-                        (chunk_size > shms_tab[ID_USB].size))
+                    if ((chunk_size_aligned > shms_tab[ID_USB].size) ||
+                        (chunk_size_aligned > shms_tab[ID_USB].size))
                     {
                         printf("Error: chunk size overflows the max supported DMA SHR buffer size\n");   
                         goto err;
                     }
-                    cryp_do_dma((const uint8_t *)shms_tab[ID_USB].address, (const uint8_t *)shms_tab[ID_FLASH].address, chunk_size, dma_in_desc, dma_out_desc);
+#if CRYPTO_DEBUG
+                    printf("Launching crypto DMA on chunk size %d (non aligned %d)\n", chunk_size_aligned, chunk_size);
+#endif
+                    cryp_do_dma((const uint8_t *)shms_tab[ID_USB].address, (const uint8_t *)shms_tab[ID_FLASH].address, chunk_size_aligned, dma_in_desc, dma_out_desc);
                     while (status_reg.dmaout_done == false){
                         continue;
                     }
@@ -452,7 +462,7 @@ int _main(uint32_t task_id)
                     /****************************************************************************************/
 
 #if CRYPTO_DEBUG
-                    printf("[write] CRYP DMA has finished ! %d\n", shms_tab[ID_USB].size);
+                    printf("[write] CRYP DMA has finished ! %d (non aligned %d)\n", chunk_size_aligned, chunk_size);
 #endif
                     status_reg.dmaout_done = false;
 #if CRYPTO_DEBUG
