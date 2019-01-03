@@ -55,8 +55,6 @@ enum shms {
     ID_FLASH = 1
 };
 
-volatile 
-
 volatile struct {
     uint32_t address;
     uint16_t size;
