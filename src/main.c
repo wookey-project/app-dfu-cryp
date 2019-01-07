@@ -527,6 +527,29 @@ int _main(uint32_t task_id)
 
                 }
 
+            case MAGIC_DFU_DWNLOAD_FINISHED:
+                {
+                    if (sinker != id_usb) {
+                        printf("DFU EOF request command only allowed from USB app\n");
+                        continue;
+                    }
+
+                    dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
+
+#if CRYPTO_DEBUG
+                    printf("[write] sending ipc to flash (%d)\n", id_dfuflash);
+#endif
+
+                    ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, sizeof(struct sync_command), (const char*)&dataplane_command_rw);
+                    if (ret != SYS_E_DONE) {
+                        printf("Error ! unable to send DFU_EOF to flash!\n");
+                    }
+
+                    break;
+
+                }
+
+
             case MAGIC_DFU_HEADER_VALID:
             case MAGIC_DFU_HEADER_INVALID:
                 {
