@@ -549,6 +549,28 @@ int _main(uint32_t task_id)
 
                 }
 
+            case MAGIC_DFU_WRITE_FINISHED:
+                {
+                    if (sinker != id_dfuflash) {
+                        printf("DFU WRITE_FINISHED request command only allowed from Flash app\n");
+                        continue;
+                    }
+
+                    dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
+
+#if CRYPTO_DEBUG
+                    printf("[write] sending ipc to smart (%d)\n", id_smart);
+#endif
+
+                    ret = sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(struct sync_command), (const char*)&dataplane_command_rw);
+                    if (ret != SYS_E_DONE) {
+                        printf("Error ! unable to send DFU_EOF to smart!\n");
+                    }
+
+                    break;
+                }
+
+
 
             case MAGIC_DFU_HEADER_VALID:
             case MAGIC_DFU_HEADER_INVALID:
