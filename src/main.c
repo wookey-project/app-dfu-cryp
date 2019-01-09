@@ -454,8 +454,30 @@ int _main(uint32_t task_id)
 #if CRYPTO_DEBUG
                     printf("Launching crypto DMA on chunk size %d (non aligned %d)\n", chunk_size_aligned, chunk_size);
 #endif
+                    /* Save the current IV so that CTR is not broken when we perform DMA again in case of error */
+		    uint8_t curr_iv[16] = { 0 };
+		    /* Get current IV value */
+		    cryp_get_iv(curr_iv, 16);
+		    bool dma_error = false;
+DMA_XFR_AGAIN: 
+		    if(dma_error == true){
+	                    /* Set the IV to current value in case of DMA error to avoid desynchronisation */
+			    cryp_init_user(KEY_128, curr_iv, 16, AES_CTR, DECRYPT);
+		    }
+                    status_reg.dmain_fifo_err = status_reg.dmain_dm_err = status_reg.dmain_tr_err = false;
+                    status_reg.dmaout_fifo_err = status_reg.dmaout_dm_err = status_reg.dmaout_tr_err = false;
+		    status_reg.dmaout_done = status_reg.dmain_done = false;
                     cryp_do_dma((const uint8_t *)shms_tab[ID_USB].address, (const uint8_t *)shms_tab[ID_FLASH].address, chunk_size_aligned, dma_in_desc, dma_out_desc);
                     while (status_reg.dmaout_done == false){
+                        /* Do we have an error? If yes, try again the DMA transfer, if no continue to wait */
+                        dma_error = status_reg.dmaout_fifo_err || status_reg.dmaout_dm_err || status_reg.dmaout_tr_err;
+                        if(dma_error == true){
+#if CRYPTO_DEBUG
+                                printf("CRYP DMA out error ... Trying again\n");
+#endif
+                                cryp_flush_fifos();
+                                goto DMA_XFR_AGAIN;
+                        }
                         continue;
                     }
                     cryp_wait_for_emtpy_fifos();
