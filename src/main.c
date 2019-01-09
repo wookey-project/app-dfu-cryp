@@ -43,7 +43,7 @@ bool is_new_chunk(void)
 #if CRYPTO_DEBUG
     printf("total bytes read: %x, crypto_chunk_size: %x\n", total_bytes_read, crypto_chunk_size);
 #endif
-    if (total_bytes_read && total_bytes_read % crypto_chunk_size == 0) 
+    if (total_bytes_read && total_bytes_read % crypto_chunk_size == 0)
     {
         return true;
     }
@@ -153,7 +153,7 @@ int _main(uint32_t task_id)
     ret = sys_init(INIT_GETTASKID, "dfuusb", &id_usb);
     printf("usb is task %x !\n", id_usb);
 
-    cryp_early_init(true, CRYP_USER, CRYP_PRODMODE, (int*) &dma_in_desc, (int*) &dma_out_desc);
+    cryp_early_init(true, CRYP_MAP_AUTO, CRYP_USER, CRYP_PRODMODE, (int*) &dma_in_desc, (int*) &dma_out_desc);
 
     printf("set init as done\n");
     ret = sys_init(INIT_DONE);
@@ -448,7 +448,7 @@ int _main(uint32_t task_id)
                     if ((chunk_size_aligned > shms_tab[ID_USB].size) ||
                         (chunk_size_aligned > shms_tab[ID_USB].size))
                     {
-                        printf("Error: chunk size overflows the max supported DMA SHR buffer size\n");   
+                        printf("Error: chunk size overflows the max supported DMA SHR buffer size\n");
                         goto err;
                     }
 #if CRYPTO_DEBUG
