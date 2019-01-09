@@ -468,10 +468,21 @@ DMA_XFR_AGAIN:
                     status_reg.dmaout_fifo_err = status_reg.dmaout_dm_err = status_reg.dmaout_tr_err = false;
 		    status_reg.dmaout_done = status_reg.dmain_done = false;
                     cryp_do_dma((const uint8_t *)shms_tab[ID_USB].address, (const uint8_t *)shms_tab[ID_FLASH].address, chunk_size_aligned, dma_in_desc, dma_out_desc);
+		    uint64_t dma_start_time, dma_curr_time;
+		    ret = sys_get_systick(&dma_start_time, PREC_MILLI);
+		    if (ret != SYS_E_DONE) {
+		        printf("Error: unable to get systick value !\n");
+			goto err;
+    		    }
                     while (status_reg.dmaout_done == false){
-                        /* Do we have an error? If yes, try again the DMA transfer, if no continue to wait */
+			ret = sys_get_systick(&dma_curr_time, PREC_MILLI);
+			if (ret != SYS_E_DONE) {
+			        printf("Error: unable to get systick value !\n");
+				goto err;
+    		    	}
+                        /* Do we have an error or a timeout? If yes, try again the DMA transfer, if no continue to wait */
                         dma_error = status_reg.dmaout_fifo_err || status_reg.dmaout_dm_err || status_reg.dmaout_tr_err;
-                        if(dma_error == true){
+                        if((dma_error == true) || ((dma_curr_time - dma_start_time) > 500)){
 #if CRYPTO_DEBUG
                                 printf("CRYP DMA out error ... Trying again\n");
 #endif
