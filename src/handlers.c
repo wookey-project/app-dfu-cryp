@@ -3,11 +3,9 @@
 #include "api/syscall.h"
 #include "main.h"
 
-#if 1
-extern volatile uint32_t num_dma_in_it;
-extern volatile uint32_t num_dma_out_it;
-extern volatile status_reg_t status_reg;
-
+volatile uint32_t num_dma_in_it = 0;
+volatile uint32_t num_dma_out_it = 0;
+volatile status_reg_t status_reg = { 0 };
 
 /* DMA handlers to report status to the main thread mode */
 void my_cryptin_handler(uint8_t irq, uint32_t status)
@@ -53,6 +51,4 @@ void my_cryptout_handler(uint8_t irq, uint32_t status)
         status_reg.dmaout_done = true;
     }
 }
-#endif
-
 

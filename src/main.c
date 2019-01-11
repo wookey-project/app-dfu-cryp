@@ -10,7 +10,6 @@
 #include "api/print.h"
 #include "api/regutils.h"
 #include "libcryp.h"
-//#include "dma_regs.h"
 #include "main.h"
 #include "handlers.h"
 #include "wookey_ipc.h"
@@ -26,17 +25,12 @@ const char *tim = "tim";
 
 volatile uint32_t numipc = 0;
 
-volatile uint32_t num_dma_in_it = 0;
-volatile uint32_t num_dma_out_it = 0;
-
 volatile uint16_t crypto_chunk_size = 0;
 volatile uint32_t total_bytes_read = 0;
 
 bool flash_ready = false;
 bool usb_ready = false;
 bool smart_ready = false;
-
-volatile status_reg_t status_reg = { 0 };
 
 bool is_new_chunk(void)
 {
@@ -444,7 +438,6 @@ int _main(uint32_t task_id)
 			chunk_size_aligned += (16 - (chunk_size_aligned % 16));
 		    }
 
-                    status_reg.dmaout_done = false;
                     if ((chunk_size_aligned > shms_tab[ID_USB].size) ||
                         (chunk_size_aligned > shms_tab[ID_USB].size))
                     {
@@ -497,7 +490,6 @@ DMA_XFR_AGAIN:
 #if CRYPTO_DEBUG
                     printf("[write] CRYP DMA has finished ! %d (non aligned %d)\n", chunk_size_aligned, chunk_size);
 #endif
-                    status_reg.dmaout_done = false;
 #if CRYPTO_DEBUG
                     printf("[write] sending ipc to flash (%d)\n", id_dfuflash);
 #endif
