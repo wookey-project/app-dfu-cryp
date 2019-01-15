@@ -32,6 +32,15 @@ bool flash_ready = false;
 bool usb_ready = false;
 bool smart_ready = false;
 
+bool is_initial_chunk(void){
+	if (total_bytes_read == 0){
+		return true;
+	}
+	else{
+		return false;
+	}
+}
+
 bool is_new_chunk(void)
 {
 #if CRYPTO_DEBUG
@@ -424,6 +433,11 @@ int _main(uint32_t task_id)
                         printf("===> Key reinjection done!\n");
 #endif
                     }
+		    if(is_new_chunk() || is_initial_chunk()){
+			/* Set the initial IV to zero and configure the algorithm in the CRYP */
+			uint8_t null_iv[16] = { 0 };
+			cryp_init_user(KEY_128, null_iv, 16, AES_CTR, DECRYPT);
+		    }
 
                     /********* FIRMWARE DECRYPTION LOGIC ************************************************************/
                     /* We have to split our encryption in multiple subencryptions to deal with key session modification
