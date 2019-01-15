@@ -23,16 +23,47 @@
 const char *tim = "tim";
 #endif
 
-volatile uint32_t numipc = 0;
+static volatile uint32_t numipc = 0;
 
-volatile uint16_t crypto_chunk_size = 0;
-volatile uint32_t total_bytes_read = 0;
 
-bool flash_ready = false;
-bool usb_ready = false;
-bool smart_ready = false;
+static volatile uint16_t usb_chunk_size = 0;
+static volatile uint16_t flash_chunk_size = 0;
 
-bool is_initial_chunk(void){
+static volatile uint16_t crypto_chunk_size = 0;
+static volatile uint32_t total_bytes_read = 0;
+
+static bool flash_ready = false;
+static bool usb_ready = false;
+static bool smart_ready = false;
+
+static bool chunk_sizes_sanity_check(void)
+{
+	/* We check that the DFU USB, crypto chunks and flash chunks are on par */
+
+	/* USB and flash chunk sizes must be equal */
+	if(usb_chunk_size != flash_chunk_size){
+		printf("Error: usb_chunk_size (%d) != flash_chunk_size (%d)\n", usb_chunk_size, flash_chunk_size);
+		goto err;
+	}
+
+	/* Crypto chunk size must be a multiple of the USB and flash chunk size */
+	if((crypto_chunk_size < usb_chunk_size) || (crypto_chunk_size < flash_chunk_size)){
+		printf("Error: crypto chunk size %d < usb and flash cunk size %d, %d\n", crypto_chunk_size, usb_chunk_size, flash_chunk_size);
+		goto err;
+	}
+	if((crypto_chunk_size % usb_chunk_size != 0) || (crypto_chunk_size % flash_chunk_size != 0)){
+		printf("Error: crypto chunk size %d is not a multiple of usb and flash chunk sizes %d, %d\n", usb_chunk_size, flash_chunk_size);
+		goto err;
+	}
+
+	return true;
+
+err:
+	return false;	
+}
+
+static bool is_initial_chunk(void)
+{
 	if (total_bytes_read == 0){
 		return true;
 	}
@@ -41,7 +72,7 @@ bool is_initial_chunk(void){
 	}
 }
 
-bool is_new_chunk(void)
+static bool is_new_chunk(void)
 {
 #if CRYPTO_DEBUG
     printf("total bytes read: %x, crypto_chunk_size: %x\n", total_bytes_read, crypto_chunk_size);
@@ -305,11 +336,13 @@ int _main(uint32_t task_id)
             if (id == id_usb) {
                     shms_tab[ID_USB].address = shm_info.addr;
                     shms_tab[ID_USB].size = shm_info.size;
+		    usb_chunk_size = shms_tab[ID_USB].size;
                     printf("received DMA SHM info from USB: @: %x, size: %d\n",
                             shms_tab[ID_USB].address, shms_tab[ID_USB].size);
             } else if (id == id_dfuflash) {
                     shms_tab[ID_FLASH].address = shm_info.addr;
                     shms_tab[ID_FLASH].size = shm_info.size;
+		    flash_chunk_size = shms_tab[ID_FLASH].size;
                     printf("received DMA SHM info from SDIO: @: %x, size: %d\n",
                             shms_tab[ID_FLASH].address, shms_tab[ID_FLASH].size);
             } else {
@@ -317,7 +350,6 @@ int _main(uint32_t task_id)
             }
         }
     }
-
 
     /*******************************************
      * Now crypto will wait for IPC orders from USB
@@ -541,6 +573,9 @@ DMA_XFR_AGAIN:
 
             case MAGIC_DFU_HEADER_SEND:
                 {
+		    /* Reset our global vairables */
+		    crypto_chunk_size = 0;
+		    total_bytes_read = 0;
                     /***************************************************
                      * DFUUSB request for smart
                      **************************************************/
@@ -629,6 +664,12 @@ DMA_XFR_AGAIN:
                         printf("chunk size received: %x\n", crypto_chunk_size);
 #endif
                     }
+
+		    /* Perform sanity checks on the received chunk sizes */
+		    if(chunk_sizes_sanity_check() == false){
+			/* If there is an issue here, we go to error! */
+			goto err;
+		    }
 #if CRYPTO_DEBUG
                     printf("[write] sending ipc to dfuusb (%d)\n", id_usb);
 #endif
