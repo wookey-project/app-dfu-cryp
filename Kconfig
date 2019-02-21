@@ -6,7 +6,6 @@ config APP_DFUCRYPTO
   default y
   select USR_LIB_WOOKEY
   select USR_DRV_CRYP
-  select USR_LIB_AES
   ---help---
     Say y if you want to embbed DFUCRYPTO custom application.
 
@@ -47,7 +46,7 @@ config APP_DFUCRYPTO_STACKSIZE
     Specify the application stack size, in bytes. By default, set to 8192
     (i.e. 8k). Depending on the number of slots required, and the usage,
     the stack can be bigger or smaller.
-    
+
 config APP_DFUCRYPTO_PRIO
   int "Application priority"
   default 0
