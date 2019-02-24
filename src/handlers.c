@@ -8,9 +8,8 @@ volatile uint32_t num_dma_out_it = 0;
 volatile status_reg_t status_reg = { 0 };
 
 /* DMA handlers to report status to the main thread mode */
-void my_cryptin_handler(uint8_t irq, uint32_t status)
+void my_cryptin_handler(__attribute__((unused)) uint8_t irq, uint32_t status)
 {
-    irq = irq;
     num_dma_in_it++;
 
     if(status & DMA_FIFO_ERROR){
@@ -30,9 +29,8 @@ void my_cryptin_handler(uint8_t irq, uint32_t status)
     }
 }
 
-void my_cryptout_handler(uint8_t irq, uint32_t status)
+void my_cryptout_handler(__attribute__((unused)) uint8_t irq, uint32_t status)
 {
-    irq = irq;
     num_dma_out_it++;
 
     if(status & DMA_FIFO_ERROR){

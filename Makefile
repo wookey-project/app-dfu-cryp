@@ -28,7 +28,7 @@ CFLAGS += -Isrc/ -Iinc/
 CFLAGS += $(APPS_CFLAGS)
 CFLAGS += -MMD -MP
 
-LDFLAGS += $(AFLAGS) -fno-builtin -nostdlib -nostartfiles
+LDFLAGS += -fno-builtin -nostdlib -nostartfiles $(AFLAGS_GCC)
 
 EXTRA_LDFLAGS ?= -Tdfucrypto.fw1.ld
 LDFLAGS += $(EXTRA_LDFLAGS) -L$(APP_BUILD_DIR) -fno-builtin -nostdlib
