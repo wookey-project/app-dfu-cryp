@@ -23,9 +23,6 @@
 const char *tim = "tim";
 #endif
 
-static volatile uint32_t numipc = 0;
-
-
 static volatile uint16_t usb_chunk_size = 0;
 static volatile uint16_t flash_chunk_size = 0;
 
@@ -92,7 +89,9 @@ enum shms {
 volatile struct {
     uint32_t address;
     uint16_t size;
-} shms_tab[2] = { 0 };
+} shms_tab[2] =  
+{ { .address = 0, .size = 0 },
+  { .address = 0, .size = 0 } };
 
 uint32_t td_dma = 0;
 
@@ -155,7 +154,8 @@ int _main(uint32_t task_id)
 
     strncpy(ipc_buf, inject_order, 6);
 #ifdef CONFIG_APP_CRYPTO_USE_GETCYCLES
-    device_t dev2 = { 0 };
+    device_t dev2;
+    memset(&dev2, 0, sizeof(device_t));
     int      dev_descriptor = 0;
 #endif
     e_syscall_ret ret = 0;
@@ -367,7 +367,8 @@ int _main(uint32_t task_id)
      *     SDIO DMA will then read from it and write into the SDIO
      *     storage
      *******************************************/
-    t_ipc_command ipc_mainloop_cmd = { 0 };
+    t_ipc_command ipc_mainloop_cmd;
+    memset(&ipc_mainloop_cmd, 0, sizeof(t_ipc_command));
     logsize_t ipcsize = sizeof(ipc_mainloop_cmd);
 
     struct sync_command_data dataplane_command_rw = { 0 };
