@@ -23,9 +23,6 @@
 const char *tim = "tim";
 #endif
 
-static volatile uint32_t numipc = 0;
-
-
 static volatile uint16_t usb_chunk_size = 0;
 static volatile uint16_t flash_chunk_size = 0;
 
