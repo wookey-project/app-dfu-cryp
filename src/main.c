@@ -106,21 +106,6 @@ void init_crypt_dma(const uint8_t * data_in,
                     uint8_t * data_out, uint32_t data_len);
 #endif
 
-uint32_t get_cycles(void)
-{
-    volatile uint32_t *cnt = (uint32_t *) 0x40000024;
- // tim2 samples at 21Mhz (APB1_f / 2), Cortex M4 is at 168Mhz
-    return (*cnt * 2 * 4);
-}
-
-uint32_t get_duration(uint32_t tim1, uint32_t tim2)
-{
-    if (tim2 < tim1) {
-        return tim2 - tim1;
-    }
-    return tim1 - tim2;
-}
-
 uint8_t id_dfuflash = 0;
 uint8_t id_usb = 0;
 uint8_t id_smart = 0;
