@@ -8,6 +8,7 @@
 
 #include "api/syscall.h"
 #include "api/print.h"
+#include "api/string.h"
 #include "api/regutils.h"
 #include "libcryp.h"
 #include "main.h"
@@ -56,7 +57,7 @@ static bool chunk_sizes_sanity_check(void)
 	return true;
 
 err:
-	return false;	
+	return false;
 }
 
 static bool is_initial_chunk(void)
@@ -89,7 +90,7 @@ enum shms {
 volatile struct {
     uint32_t address;
     uint16_t size;
-} shms_tab[2] =  
+} shms_tab[2] =
 { { .address = 0, .size = 0 },
   { .address = 0, .size = 0 } };
 
@@ -484,7 +485,7 @@ int _main(uint32_t task_id)
 		    /* Get current IV value */
 		    cryp_get_iv(curr_iv, 16);
 		    bool dma_error = false;
-DMA_XFR_AGAIN: 
+DMA_XFR_AGAIN:
 		    if(dma_error == true){
 	                    /* Set the IV to current value in case of DMA error to avoid desynchronisation */
 			    cryp_init_user(KEY_128, curr_iv, 16, AES_CTR, DECRYPT);
