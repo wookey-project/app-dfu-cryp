@@ -651,13 +651,14 @@ DMA_XFR_AGAIN:
 #if CRYPTO_DEBUG
                         printf("chunk size received: %x\n", crypto_chunk_size);
 #endif
+                        /* Perform sanity checks on the received chunk sizes */
+                        if(chunk_sizes_sanity_check() == false) {
+                            /* If there is an issue here, we go to error! */
+                            goto err;
+                        }
                     }
-
-		    /* Perform sanity checks on the received chunk sizes */
-		    if(chunk_sizes_sanity_check() == false){
-			/* If there is an issue here, we go to error! */
-			goto err;
-		    }
+                    /* in case of invalid header, the invalid information state is sent back
+                     * to dfuusb */
 #if CRYPTO_DEBUG
                     printf("[write] sending ipc to dfuusb (%d)\n", id_usb);
 #endif
