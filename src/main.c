@@ -47,7 +47,7 @@ static bool chunk_sizes_sanity_check(void)
 
 	/* Crypto chunk size must be a multiple of the USB and flash chunk size */
 	if((crypto_chunk_size < usb_chunk_size) || (crypto_chunk_size < flash_chunk_size)){
-		printf("Error: crypto chunk size %d < usb and flash cunk size %d, %d\n", crypto_chunk_size, usb_chunk_size, flash_chunk_size);
+		printf("Error: crypto chunk size %d < usb and flash chunk size %d, %d\n", crypto_chunk_size, usb_chunk_size, flash_chunk_size);
 		goto err;
 	}
 	if((crypto_chunk_size % usb_chunk_size != 0) || (crypto_chunk_size % flash_chunk_size != 0)){
@@ -118,6 +118,23 @@ uint32_t dma_out_desc;
 uint8_t master_key_hash[32] = {0};
 
 
+
+/* Ask the dfusmart task to reboot through IPC */
+static void ask_reboot(void){
+        struct sync_command_data sync_command;
+        sync_command.magic = MAGIC_REBOOT_REQUEST;
+        sync_command.state = SYNC_WAIT;
+        sys_ipc(IPC_SEND_SYNC, id_smart,
+                    sizeof(struct sync_command),
+                    (char*)&sync_command);
+	/* We should not end up here in case of reset ... 
+	 * But this can happen when dfusmart refuses to perform
+	 * the reset: in this case, we yield.
+	 */
+        while (1) {
+        	sys_yield();
+        }
+}
 
 /*
  * We use the local -fno-stack-protector flag for main because
@@ -704,7 +721,8 @@ DMA_XFR_AGAIN:
     }
 
 err:
+    ask_reboot();
     while (1) {
-        sys_yield();
+     	sys_yield();
     }
 }
