@@ -1,7 +1,7 @@
 #ifndef MAIN_H_
 #define MAIN_H_
 
-#include "api/types.h"
+#include "libc/types.h"
 
 typedef struct {
     bool dmain_done;
