@@ -251,12 +251,15 @@ int _main(uint32_t task_id)
 
     do {
       ret = sys_ipc(IPC_SEND_SYNC, id_smart, size, (char*)&ipc_sync_cmd);
-    } while (ret == SYS_E_BUSY);
+    } while (ret != SYS_E_DONE);
 
     id = id_smart;
     size = sizeof(struct sync_command);
 
     ret = sys_ipc(IPC_RECV_SYNC, &id, &size, (char*)&ipc_sync_cmd_data);
+    if(ret != SYS_E_DONE){
+        goto err;
+    }
 
     if (   ipc_sync_cmd_data.magic == MAGIC_CRYPTO_INJECT_RESP
         && ipc_sync_cmd_data.state == SYNC_DONE) {
@@ -281,7 +284,7 @@ int _main(uint32_t task_id)
     /* First inform SDIO block that everything is ready... */
     do {
       ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, size, (char*)&ipc_sync_cmd);
-    } while (ret == SYS_E_BUSY);
+    } while (ret != SYS_E_DONE);
     printf("sending end_of_cryp to dfuflash done.\n");
 
 
@@ -292,7 +295,7 @@ int _main(uint32_t task_id)
     /* First inform SDIO block that everything is ready... */
     do {
       ret = sys_ipc(IPC_SEND_SYNC, id_usb, size, (char*)&ipc_sync_cmd);
-    } while (ret == SYS_E_BUSY);
+    } while (ret != SYS_E_DONE);
     printf("sending end_of_cryp to usb-dfu done.\n");
 
 
@@ -316,6 +319,9 @@ int _main(uint32_t task_id)
             } else {
                     printf("received msg from id %d ??\n", id);
             }
+        }
+        else{
+            goto err;
         }
     }
 
@@ -353,6 +359,9 @@ int _main(uint32_t task_id)
                     printf("received msg from id %d ??\n", id);
             }
         }
+        else{
+           goto err;
+        }
     }
 
     /*******************************************
@@ -385,7 +394,10 @@ int _main(uint32_t task_id)
         ipcsize = sizeof(ipc_mainloop_cmd);
         // wait for read or write request from USB
 
-        sys_ipc(IPC_RECV_SYNC, &sinker, &ipcsize, (char*)&ipc_mainloop_cmd);
+        ret = sys_ipc(IPC_RECV_SYNC, &sinker, &ipcsize, (char*)&ipc_mainloop_cmd);
+        if(ret != SYS_E_DONE){
+            goto err;
+        }
 
 #if CRYPTO_DEBUG
         printf("Received IPC from task %d\n", sinker);
@@ -463,9 +475,15 @@ int _main(uint32_t task_id)
                         ipc_sync_cmd_data.magic = MAGIC_CRYPTO_INJECT_CMD;
                         /* FIXME: this IPC should transmit the current chunk in order to generate its hash */
 
-                        sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(struct sync_command), (char*)&ipc_sync_cmd_data);
+                        ret = sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(struct sync_command), (char*)&ipc_sync_cmd_data);
+                        if(ret != SYS_E_DONE){
+                            goto err;
+                        }
 
-                        sys_ipc(IPC_RECV_SYNC, &id, &size, (char*)&ipc_sync_cmd_data);
+                        ret = sys_ipc(IPC_RECV_SYNC, &id, &size, (char*)&ipc_sync_cmd_data);
+                        if(ret != SYS_E_DONE){
+                            goto err;
+                        }
 #if CRYPTO_DEBUG
                         printf("===> Key reinjection done!\n");
 #endif
@@ -694,6 +712,9 @@ DMA_XFR_AGAIN:
                 {
                     if (sinker == id_usb) {
                       ret = sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(t_ipc_command), (const char*)&ipc_mainloop_cmd);
+                      if(ret != SYS_E_DONE){
+                          goto err;
+                      }
                     }
                     break;
                 }
