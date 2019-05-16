@@ -9,6 +9,8 @@ config APP_DFUCRYPTO
   ---help---
     Say y if you want to embbed DFUCRYPTO custom application.
 
+if APP_DFUCRYPTO
+
 config APP_DFUCRYPTO_FW
   bool "Dfucrypto App for firmware mode"
   depends on APP_DFUCRYPTO
@@ -178,5 +180,7 @@ endmenu
 
 
 endmenu
+
+endif
 
 endmenu
