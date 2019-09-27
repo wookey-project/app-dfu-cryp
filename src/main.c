@@ -111,6 +111,7 @@ void init_crypt_dma(const uint8_t * data_in,
 uint8_t id_dfuflash = 0;
 uint8_t id_usb = 0;
 uint8_t id_smart = 0;
+uint8_t id_pin   = 0;
 
 uint32_t dma_in_desc;
 uint32_t dma_out_desc;
@@ -184,6 +185,9 @@ int _main(uint32_t task_id)
 
     ret = sys_init(INIT_GETTASKID, "dfusmart", &id_smart);
     printf("smart is task %x !\n", id_smart);
+
+    ret = sys_init(INIT_GETTASKID, "pin", &id_pin);
+    printf("pin is task %x !\n", id_pin);
 
     ret = sys_init(INIT_GETTASKID, "dfuflash", &id_dfuflash);
     printf("sdio is task %x !\n", id_dfuflash);
@@ -269,6 +273,37 @@ int _main(uint32_t task_id)
         goto err;
     }
     cryp_init_dma(my_cryptin_handler, my_cryptout_handler, dma_in_desc, dma_out_desc);
+
+
+    /*******************************************
+     * Here, the key injection is done. This means that the authentication phase
+     * is terminated (this is required for the key injection to be complete).
+     * In order to ensure that dfusmart has not been corrupted and that the user
+     * has validated his passphrase, we ask pin to confirm this state.
+     *******************************************/
+    size = sizeof(struct sync_command);
+    ipc_sync_cmd_data.magic = MAGIC_AUTH_STATE_PASSED;
+    ipc_sync_cmd_data.state = SYNC_WAIT;
+
+    if ((sys_ipc(IPC_SEND_SYNC, id_pin, size, (char*)&ipc_sync_cmd_data)) != SYS_E_DONE) {
+        printf("err: unable to request state confirmation from PIN\n");
+        goto err;
+    }
+
+    /* and wait for receiving... */
+    id = id_pin;
+    size = sizeof(struct sync_command);
+    if ((sys_ipc(IPC_RECV_SYNC, &id, &size, (char*)&ipc_sync_cmd_data)) != SYS_E_DONE) {
+        printf("err: unable to request state confirmation from PIN\n");
+        goto err;
+    }
+    if (   ipc_sync_cmd_data.magic != MAGIC_AUTH_STATE_PASSED
+        || ipc_sync_cmd_data.state != SYNC_ACKNOWLEDGE) {
+        printf("Pin didn't acknowledge that we are in post authentication phase!\n");
+        goto err;
+    }
+
+    printf("PIN has confirmed that we are in post-authentication phase. Continuing...\n");
 
     /*******************************************
      * cryptography initialization done.
