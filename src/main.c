@@ -111,6 +111,7 @@ void init_crypt_dma(const uint8_t * data_in,
 uint8_t id_dfuflash = 0;
 uint8_t id_usb = 0;
 uint8_t id_smart = 0;
+uint8_t id_pin   = 0;
 
 uint32_t dma_in_desc;
 uint32_t dma_out_desc;
@@ -178,23 +179,43 @@ int _main(uint32_t task_id)
     dev2.gpio_num = 0;
 
     printf("registering %s driver\n", dev2.name);
-    ret = sys_init(INIT_DEVACCESS, &dev2, &dev_descriptor);
-    printf("sys_init returns %s !\n", strerror(ret));
+    if ((ret = sys_init(INIT_DEVACCESS, &dev2, &dev_descriptor)) != SYS_E_DONE) {
+        printf("sys_init returns %s !\n", strerror(ret));
+        goto err_init;
+    }
 #endif
 
-    ret = sys_init(INIT_GETTASKID, "dfusmart", &id_smart);
+    if ((ret = sys_init(INIT_GETTASKID, "dfusmart", &id_smart)) != SYS_E_DONE) {
+        printf("sys_init returns %s !\n", strerror(ret));
+        goto err_init;
+    }
     printf("smart is task %x !\n", id_smart);
 
-    ret = sys_init(INIT_GETTASKID, "dfuflash", &id_dfuflash);
+    if ((ret = sys_init(INIT_GETTASKID, "pin", &id_pin)) != SYS_E_DONE) {
+        printf("sys_init returns %s !\n", strerror(ret));
+        goto err_init;
+    }
+    printf("pin is task %x !\n", id_pin);
+
+    if ((ret = sys_init(INIT_GETTASKID, "dfuflash", &id_dfuflash)) != SYS_E_DONE) {
+        printf("sys_init returns %s !\n", strerror(ret));
+        goto err_init;
+    }
     printf("sdio is task %x !\n", id_dfuflash);
 
-    ret = sys_init(INIT_GETTASKID, "dfuusb", &id_usb);
+    if ((ret = sys_init(INIT_GETTASKID, "dfuusb", &id_usb)) != SYS_E_DONE) {
+        printf("sys_init returns %s !\n", strerror(ret));
+        goto err_init;
+    }
     printf("usb is task %x !\n", id_usb);
 
     cryp_early_init(true, CRYP_MAP_AUTO, CRYP_USER, (int*) &dma_in_desc, (int*) &dma_out_desc);
 
     printf("set init as done\n");
-    ret = sys_init(INIT_DONE);
+    if ((ret = sys_init(INIT_DONE)) != SYS_E_DONE) {
+        printf("sys_init returns %s !\n", strerror(ret));
+        goto err_init;
+    }
     printf("sys_init returns %s !\n", strerror(ret));
 
     /*******************************************
@@ -208,9 +229,12 @@ int _main(uint32_t task_id)
          * (usb, sdio & smart), in any order
          */
         id = ANY_APP;
-        do {
-            ret = sys_ipc(IPC_RECV_SYNC, &id, &size, (char*)&ipc_sync_cmd);
-        } while (ret != SYS_E_DONE);
+        ret = sys_ipc(IPC_RECV_SYNC, &id, &size, (char*)&ipc_sync_cmd);
+        if (ret != SYS_E_DONE) {
+            /* defensive programing, should not append as there is no
+             * asynchronous IPC in this task */
+            continue;
+        }
         if (   ipc_sync_cmd.magic == MAGIC_TASK_STATE_CMD
                 && ipc_sync_cmd.state == SYNC_READY) {
             printf("task %x has finished its init phase, acknowledge...\n", id);
@@ -219,10 +243,12 @@ int _main(uint32_t task_id)
         ipc_sync_cmd.magic = MAGIC_TASK_STATE_RESP;
         ipc_sync_cmd.state = SYNC_ACKNOWLEDGE;
 
-        do {
-            size = sizeof(struct sync_command);
-            ret = sys_ipc(IPC_SEND_SYNC, id, size, (char*)&ipc_sync_cmd);
-        } while (ret != SYS_E_DONE);
+        size = sizeof(struct sync_command);
+        ret = sys_ipc(IPC_SEND_SYNC, id, size, (char*)&ipc_sync_cmd);
+        if (ret != SYS_E_DONE) {
+            printf("sys_ipc(IPC_SEND_SYNC, %d) failed! Exiting...\n", id);
+            goto err;
+        }
 
         if (id == id_smart) { smart_ready = true; }
         if (id == id_usb)   { usb_ready = true; }
@@ -249,9 +275,11 @@ int _main(uint32_t task_id)
     ipc_sync_cmd.magic = MAGIC_CRYPTO_INJECT_CMD;
     ipc_sync_cmd.state = SYNC_READY;
 
-    do {
-      ret = sys_ipc(IPC_SEND_SYNC, id_smart, size, (char*)&ipc_sync_cmd);
-    } while (ret != SYS_E_DONE);
+    ret = sys_ipc(IPC_SEND_SYNC, id_smart, size, (char*)&ipc_sync_cmd);
+    if (ret != SYS_E_DONE) {
+        printf("sys_ipc(IPC_SEND_SYNC, id_smart) failed! Exiting...\n");
+        goto err;
+    }
 
     id = id_smart;
     size = sizeof(struct sync_command);
@@ -270,6 +298,37 @@ int _main(uint32_t task_id)
     }
     cryp_init_dma(my_cryptin_handler, my_cryptout_handler, dma_in_desc, dma_out_desc);
 
+
+    /*******************************************
+     * Here, the key injection is done. This means that the authentication phase
+     * is terminated (this is required for the key injection to be complete).
+     * In order to ensure that dfusmart has not been corrupted and that the user
+     * has validated his passphrase, we ask pin to confirm this state.
+     *******************************************/
+    size = sizeof(struct sync_command);
+    ipc_sync_cmd_data.magic = MAGIC_AUTH_STATE_PASSED;
+    ipc_sync_cmd_data.state = SYNC_WAIT;
+
+    if ((sys_ipc(IPC_SEND_SYNC, id_pin, size, (char*)&ipc_sync_cmd_data)) != SYS_E_DONE) {
+        printf("err: unable to request state confirmation from PIN\n");
+        goto err;
+    }
+
+    /* and wait for receiving... */
+    id = id_pin;
+    size = sizeof(struct sync_command);
+    if ((sys_ipc(IPC_RECV_SYNC, &id, &size, (char*)&ipc_sync_cmd_data)) != SYS_E_DONE) {
+        printf("err: unable to request state confirmation from PIN\n");
+        goto err;
+    }
+    if (   ipc_sync_cmd_data.magic != MAGIC_AUTH_STATE_PASSED
+        || ipc_sync_cmd_data.state != SYNC_ACKNOWLEDGE) {
+        printf("Pin didn't acknowledge that we are in post authentication phase!\n");
+        goto err;
+    }
+
+    printf("PIN has confirmed that we are in post-authentication phase. Continuing...\n");
+
     /*******************************************
      * cryptography initialization done.
      * Let start 2nd pase (Flash/Crypto/USB-DFU runtime)
@@ -282,9 +341,11 @@ int _main(uint32_t task_id)
     ipc_sync_cmd.state = SYNC_READY;
 
     /* First inform SDIO block that everything is ready... */
-    do {
-      ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, size, (char*)&ipc_sync_cmd);
-    } while (ret != SYS_E_DONE);
+    ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, size, (char*)&ipc_sync_cmd);
+    if (ret != SYS_E_DONE) {
+        printf("sys_ipc(IPC_SEND_SYNC, id_sdio) failed! Exiting...\n");
+        goto err;
+    }
     printf("sending end_of_cryp to dfuflash done.\n");
 
 
@@ -293,9 +354,11 @@ int _main(uint32_t task_id)
     ipc_sync_cmd.state = SYNC_READY;
 
     /* First inform SDIO block that everything is ready... */
-    do {
-      ret = sys_ipc(IPC_SEND_SYNC, id_usb, size, (char*)&ipc_sync_cmd);
-    } while (ret != SYS_E_DONE);
+    ret = sys_ipc(IPC_SEND_SYNC, id_usb, size, (char*)&ipc_sync_cmd);
+    if (ret != SYS_E_DONE) {
+        printf("sys_ipc(IPC_SEND_SYNC, id_sdio) failed! Exiting...\n");
+        goto err;
+    }
     printf("sending end_of_cryp to usb-dfu done.\n");
 
 
@@ -426,6 +489,7 @@ int _main(uint32_t task_id)
                     ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, sizeof(struct sync_command_data), (const char*)&flash_dataplane_command_rw);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send DMA_RD_REQ to flash!\n");
+                        goto err;
                     }
 
                     // wait for flash task acknowledge (IPC)
@@ -435,6 +499,7 @@ int _main(uint32_t task_id)
                     ret = sys_ipc(IPC_RECV_SYNC, &sinker, &ipcsize, (char*)&dataplane_command_ack);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to receive back DMA_RD_ACK from flash!\n");
+                        goto err;
                     }
 
 #if CRYPTO_DEBUG
@@ -444,6 +509,7 @@ int _main(uint32_t task_id)
                     ret = sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(struct sync_command_data), (const char*)&dataplane_command_ack);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send back DMA_WR_ACK to usb!\n");
+                        goto err;
                     }
 
                     break;
@@ -457,7 +523,7 @@ int _main(uint32_t task_id)
                      **************************************************/
                     if (sinker != id_usb) {
                         printf("data rd DMA request command only allowed from USB app\n");
-                        continue;
+                        goto err;
                     }
 
                     dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
@@ -488,27 +554,27 @@ int _main(uint32_t task_id)
                         printf("===> Key reinjection done!\n");
 #endif
                     }
-		    if(is_new_chunk() || is_initial_chunk()){
-			/* Set the initial IV to zero and configure the algorithm in the CRYP */
-			uint8_t null_iv[16] = { 0 };
-			cryp_init_user(KEY_128, null_iv, 16, AES_CTR, DECRYPT);
-		    }
+                    if(is_new_chunk() || is_initial_chunk()){
+                        /* Set the initial IV to zero and configure the algorithm in the CRYP */
+                        uint8_t null_iv[16] = { 0 };
+                        cryp_init_user(KEY_128, null_iv, 16, AES_CTR, DECRYPT);
+                    }
 
                     /********* FIRMWARE DECRYPTION LOGIC ************************************************************/
                     /* We have to split our encryption in multiple subencryptions to deal with key session modification
                      * on the crypto chunk size boundaries
                      */
                     uint32_t chunk_size = dataplane_command_rw.data.u16[0];
-		    uint32_t chunk_size_aligned = chunk_size;
+                    uint32_t chunk_size_aligned = chunk_size;
                     /* NOTE: the unerlying hardware does not support CTR mode on unaligned plaintexts:
-		     * we have to align our size on the AES block size boundary
-		     */
-		    if(chunk_size_aligned % 16 != 0){
-			chunk_size_aligned += (16 - (chunk_size_aligned % 16));
-		    }
+                     * we have to align our size on the AES block size boundary
+                     */
+                    if(chunk_size_aligned % 16 != 0){
+                        chunk_size_aligned += (16 - (chunk_size_aligned % 16));
+                    }
 
                     if ((chunk_size_aligned > shms_tab[ID_USB].size) ||
-                        (chunk_size_aligned > shms_tab[ID_USB].size))
+                            (chunk_size_aligned > shms_tab[ID_USB].size))
                     {
                         printf("Error: chunk size overflows the max supported DMA SHR buffer size\n");
                         goto err;
@@ -517,39 +583,39 @@ int _main(uint32_t task_id)
                     printf("Launching crypto DMA on chunk size %d (non aligned %d)\n", chunk_size_aligned, chunk_size);
 #endif
                     /* Save the current IV so that CTR is not broken when we perform DMA again in case of error */
-		    uint8_t curr_iv[16] = { 0 };
-		    /* Get current IV value */
-		    cryp_get_iv(curr_iv, 16);
-		    bool dma_error = false;
+                    uint8_t curr_iv[16] = { 0 };
+                    /* Get current IV value */
+                    cryp_get_iv(curr_iv, 16);
+                    bool dma_error = false;
 DMA_XFR_AGAIN:
-		    if(dma_error == true){
-	                    /* Set the IV to current value in case of DMA error to avoid desynchronisation */
-			    cryp_init_user(KEY_128, curr_iv, 16, AES_CTR, DECRYPT);
-		    }
+                    if(dma_error == true){
+                        /* Set the IV to current value in case of DMA error to avoid desynchronisation */
+                        cryp_init_user(KEY_128, curr_iv, 16, AES_CTR, DECRYPT);
+                    }
                     status_reg.dmain_fifo_err = status_reg.dmain_dm_err = status_reg.dmain_tr_err = false;
                     status_reg.dmaout_fifo_err = status_reg.dmaout_dm_err = status_reg.dmaout_tr_err = false;
-		    status_reg.dmaout_done = status_reg.dmain_done = false;
+                    status_reg.dmaout_done = status_reg.dmain_done = false;
                     cryp_do_dma((const uint8_t *)shms_tab[ID_USB].address, (const uint8_t *)shms_tab[ID_FLASH].address, chunk_size_aligned, dma_in_desc, dma_out_desc);
-		    uint64_t dma_start_time, dma_curr_time;
-		    ret = sys_get_systick(&dma_start_time, PREC_MILLI);
-		    if (ret != SYS_E_DONE) {
-		        printf("Error: unable to get systick value !\n");
-			goto err;
-    		    }
-                    while (status_reg.dmaout_done == false){
-			ret = sys_get_systick(&dma_curr_time, PREC_MILLI);
-			if (ret != SYS_E_DONE) {
-			        printf("Error: unable to get systick value !\n");
-				goto err;
-    		    	}
+                    uint64_t dma_start_time, dma_curr_time;
+                    ret = sys_get_systick(&dma_start_time, PREC_MILLI);
+                    if (ret != SYS_E_DONE) {
+                        printf("Error: unable to get systick value !\n");
+                        goto err;
+                    }
+                    while (status_reg.dmaout_done == false) {
+                        ret = sys_get_systick(&dma_curr_time, PREC_MILLI);
+                        if (ret != SYS_E_DONE) {
+                            printf("Error: unable to get systick value !\n");
+                            goto err;
+                        }
                         /* Do we have an error or a timeout? If yes, try again the DMA transfer, if no continue to wait */
                         dma_error = status_reg.dmaout_fifo_err || status_reg.dmaout_dm_err || status_reg.dmaout_tr_err;
                         if((dma_error == true) || ((dma_curr_time - dma_start_time) > 500)){
 #if CRYPTO_DEBUG
-                                printf("CRYP DMA out error ... Trying again\n");
+                            printf("CRYP DMA out error ... Trying again\n");
 #endif
-                                cryp_flush_fifos();
-                                goto DMA_XFR_AGAIN;
+                            cryp_flush_fifos();
+                            goto DMA_XFR_AGAIN;
                         }
                         continue;
                     }
@@ -575,6 +641,7 @@ DMA_XFR_AGAIN:
                     ret = sys_ipc(IPC_RECV_SYNC, &sinker, &ipcsize, (char*)&dataplane_command_ack);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to receive back DMA_WR_ACK from flash!\n");
+                        goto err;
                     }
 
 #if CRYPTO_DEBUG
@@ -586,6 +653,7 @@ DMA_XFR_AGAIN:
                     ret = sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(struct sync_command_data), (const char*)&dataplane_command_ack);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send back DMA_WR_ACK to usb!\n");
+                        goto err;
                     }
 
                     total_bytes_read += chunk_size;
@@ -604,7 +672,7 @@ DMA_XFR_AGAIN:
                      **************************************************/
                     if (sinker != id_usb) {
                         printf("DFU header request command only allowed from USB app\n");
-                        continue;
+                        goto err;
                     }
 
                     dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
@@ -616,6 +684,7 @@ DMA_XFR_AGAIN:
                     ret = sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(struct sync_command_data), (const char*)&dataplane_command_rw);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send DFU_HEADER_SEND to smart!\n");
+                        goto err;
                     }
 
                     break;
@@ -626,7 +695,7 @@ DMA_XFR_AGAIN:
                 {
                     if (sinker != id_usb) {
                         printf("DFU EOF request command only allowed from USB app\n");
-                        continue;
+                        goto err;
                     }
 
                     dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
@@ -638,6 +707,7 @@ DMA_XFR_AGAIN:
                     ret = sys_ipc(IPC_SEND_SYNC, id_dfuflash, sizeof(struct sync_command), (const char*)&dataplane_command_rw);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send DFU_EOF to flash!\n");
+                        goto err;
                     }
 
                     break;
@@ -648,7 +718,7 @@ DMA_XFR_AGAIN:
                 {
                     if (sinker != id_dfuflash) {
                         printf("DFU WRITE_FINISHED request command only allowed from Flash app\n");
-                        continue;
+                        goto err;
                     }
 
                     dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
@@ -660,6 +730,7 @@ DMA_XFR_AGAIN:
                     ret = sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(struct sync_command), (const char*)&dataplane_command_rw);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send DFU_EOF to smart!\n");
+                        goto err;
                     }
 
                     break;
@@ -675,7 +746,7 @@ DMA_XFR_AGAIN:
                      **************************************************/
                     if (sinker != id_smart) {
                         printf("DFU header validation command only allowed from Smart app\n");
-                        continue;
+                        goto err;
                     }
 
                     dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
@@ -701,6 +772,7 @@ DMA_XFR_AGAIN:
                     ret = sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(struct sync_command_data), (const char*)&dataplane_command_rw);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send DFU_HEADER_VALID to dfuusb!\n");
+                        goto err;
                     }
 
                     break;
@@ -710,13 +782,12 @@ DMA_XFR_AGAIN:
 
             case MAGIC_REBOOT_REQUEST:
                 {
-                    if (sinker == id_usb) {
-                      ret = sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(t_ipc_command), (const char*)&ipc_mainloop_cmd);
-                      if(ret != SYS_E_DONE){
-                          goto err;
-                      }
+                    /* anyone can requst reboot event on error */
+                    ret = sys_ipc(IPC_SEND_SYNC, id_smart, sizeof(t_ipc_command), (const char*)&ipc_mainloop_cmd);
+                    if(ret != SYS_E_DONE){
+                        goto err;
                     }
-                    break;
+                break;
                 }
 
 
@@ -725,22 +796,25 @@ DMA_XFR_AGAIN:
                     /***************************************************
                      * Invalid request. Returning invalid to sender
                      **************************************************/
-                    printf("invalid request from USB !\n");
+                    printf("invalid request  !\n");
                     // returning INVALID magic to USB
                     ipc_mainloop_cmd.magic = MAGIC_INVALID;
 
                     // acknowledge to USB: data has been written to disk (IPC)
-                    ret = sys_ipc(IPC_SEND_SYNC, id_usb, sizeof(t_ipc_command), (const char*)&ipc_mainloop_cmd);
+                    ret = sys_ipc(IPC_SEND_SYNC, sinker, sizeof(t_ipc_command), (const char*)&ipc_mainloop_cmd);
                     if (ret != SYS_E_DONE) {
                         printf("Error ! unable to send back INVALID to usb!\n");
                     }
                     break;
-
                 }
         }
 
     }
 
+err_init:
+    while (1) {
+     	sys_yield();
+    }
 err:
     ask_reboot();
     while (1) {
