@@ -529,13 +529,12 @@ int _main(uint32_t task_id)
                     dataplane_command_rw = ipc_mainloop_cmd.sync_cmd_data;
                     struct sync_command_data flash_dataplane_command_rw = dataplane_command_rw;
 
-                    /* Ask smart to reinject the key (only for AES) */
-                    //write plane, first exec DMA, then ask SDIO for writing
+                    /* Ask dfusmart to reinject the key (only for AES) */
                     if (is_new_chunk()) {
 #if CRYPTO_DEBUG
                         printf("===> Asking for reinjection!\n");
 #endif
-                        /* When switching from DECRYPT to ENCRYPT, we have to inject the key again */
+                        /* When switching chunks, we have to inject the key again */
                         id = id_smart;
                         size = sizeof (struct sync_command);
                         ipc_sync_cmd_data.magic = MAGIC_CRYPTO_INJECT_CMD;
